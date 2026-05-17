@@ -27,6 +27,39 @@ English version: [README.md](README.md)
 
 也就是说，这个仓库现在更像一个“研究启动点”，后续实现将按实验阶段逐步补齐。
 
+## 现状回顾：这些实验现在并没有都跑完
+
+没有。就“是否已经完成支撑顶会投稿的完整实验包”这个问题而言，当前仓库还**没有**到那个阶段。
+
+目前已经具备的内容主要是：
+
+- 研究问题定义与方法提案；
+- 一套相对完整的实验蓝图；
+- 一个 RL 引导局部 repair 的最小可复现实验原型。
+
+但以下这些关键实验块，**还没有**以论文级规模全部完成：
+
+- 在统一预算下覆盖 **小/中/大规模** 的系统实验；
+- 覆盖精确优化、分解方法、元启发式、现代神经调度器的 **更完整 baseline 套件**；
+- 跨规模、柔性比、扰动类型、benchmark family 的 **泛化实验**；
+- 组件级、表示级、奖励级、训练级的 **消融实验**；
+- **公开 benchmark / 更真实 benchmark** 上的评测，如 Brandimarte、Hurink 等；
+- 至少 `5` 个训练种子、置信区间、paired significance test 等 **统计稳健性报告**；
+- 求解器后端迁移、长预算 exactness、等算力公平性等 **审稿防御实验**。
+
+所以更准确的说法是：当前仓库是一个**朝顶会实验标准推进的研究仓库**，而不是“这些实验已经全部跑完的定稿仓库”。
+
+## 参考相关论文后，应满足的实验标准
+
+下面的实验设计，不是凭空拍脑袋列出来的，而是参考了这类调度/强化学习论文里已经比较稳定的实验范式，尤其包括：
+
+- **L2D**：*Learning to Dispatch for Job Shop Scheduling via Deep Reinforcement Learning*（2020），它基本确立了“要和人工 dispatching rule 对比，并测试对更大未见实例的泛化”这一套实验预期；
+- **DAN**：*Flexible Job Shop Scheduling via Dual Attention Network Based Reinforcement Learning*（2023），进一步强化了“合成数据 + 公共 FJSP benchmark”双线验证的重要性；
+- **DRL-Guided Improvement Heuristic**（ICLR 2024），把 improvement-based RL 与更强局部搜索对比的门槛抬高了；
+- **Graph Neural Networks for Job Shop Scheduling Problems: A Survey**（2024），系统总结了现代调度论文越来越强调 benchmark 覆盖、baseline 公平性、泛化能力和统计严谨性。
+
+也正因为如此，下面的“实验计划”不应被理解为可选项，而应被理解为：**如果要支撑顶会投稿，这些实验块基本都得补齐。**
+
 ## 方法概要
 
 本项目拟研究的是一个 **展开式（unrolled）LBBD 求解器**：
@@ -57,6 +90,23 @@ English version: [README.md](README.md)
 5. **性能来源可归因**：性能提升应能清晰归因到修复区域选择、预算控制、割优先级、模仿预训练、异构图编码等具体组件。
 
 审稿人最关心的不是“比谁高了几点”，而是“你到底验证了什么命题，证据是否闭环”。因此实验章节必须围绕这五点组织。
+
+### 1.5. 支撑顶会投稿的最小实验包
+
+如果目标是支撑一篇严肃的 NeurIPS / ICLR / ICML / OR 风格论文，下面这些实验块基本都要落地，不能只做其中一小部分。
+
+| 实验块 | 至少要跑什么 | 审稿人为什么一定会问 |
+|---|---|---|
+| 规模梯度实验 | 小/中/大规模，在统一在线预算下系统比较 | 防止只挑一个对自己有利的规模 |
+| 广泛 baseline | 精确法、LBBD、启发式、元启发式、神经方法 | 防止对比面过窄 |
+| 公共 benchmark | Brandimarte、Hurink 及相关家族 | 证明和主流文献真正接轨 |
+| 动态重调度集 | 静态 benchmark 转 repair 任务 + 合成动态集 | 证明研究的是 rescheduling，而不只是静态排程 |
+| 泛化实验 | ID、Scale-OOD、Flexibility-OOD、Disturbance-OOD、Family-OOD | 支撑“不是只记住训练分布” |
+| 消融实验 | 组件、表示、奖励、训练协议多维消融 | 说明性能提升到底来自哪里 |
+| 统计稳健性 | 至少 `5` 个种子、CI、paired test、effect size | 防止单次运行过度宣称 |
+| 审稿防御实验 | 等算力、公平性、长预算 exactness、后端迁移 | 为 rebuttal 提前准备证据 |
+
+凡是明显缺少这张矩阵中大块内容的结果，都更适合表述为**原型验证**或**阶段性实验**，而不是“完整论文证据”。
 
 ### 2. 数据集与预处理
 
@@ -453,9 +503,24 @@ English version: [README.md](README.md)
 
 1. 先把扰动生成器和指标体系搭好；
 2. 实现一个可复现的 plain LBBD baseline；
-3. 明确 RL-Region-LBBD 的状态、动作和奖励接口；
-4. 收集 expert 轨迹用于模仿预训练；
-5. 再接 PPO 微调和 anytime 评测。
+3. 加入 Brandimarte / Hurink 等公共 benchmark 的加载与转换；
+4. 明确 RL-Region-LBBD 的状态、动作和奖励接口；
+5. 把 baseline 套件扩展到 CP-SAT、ALNS、dispatching rule 与代表性 neural comparator；
+6. 收集 expert 轨迹用于模仿预训练；
+7. 接入 PPO 微调、多随机种子评测与 anytime 曲线；
+8. 在做出更强论文结论之前，把泛化实验和消融矩阵补齐。
+
+## README 使用说明
+
+本 README 现在同时承担两个角色：
+
+- 如实说明仓库当前做到哪里；
+- 明确列出“若要支撑顶会投稿，还必须补哪些实验”。
+
+因此阅读时需要始终区分两件事：
+
+- **哪些内容已经实现或至少做过最小运行**；
+- **哪些内容仍然属于论文级实验待办**。
 
 ## 说明来源
 

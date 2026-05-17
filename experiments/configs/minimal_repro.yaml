@@ -1,0 +1,52 @@
+experiment_name: minimal_rl_region_lbbd
+seed: 20260517
+device: cuda
+output_root: experiments/results
+data:
+  train_instances: 48
+  val_instances: 12
+  test_instances: 24
+  train_job_range: [6, 8]
+  test_job_range: [8, 10]
+  machines: 4
+  ops_per_job: [3, 5]
+  flexibility_choices: [2, 3]
+  duration_range: [2, 10]
+  due_date_factor: 1.45
+  disturbance:
+    reschedule_fraction: 0.45
+    breakdown_duration_fraction: [0.08, 0.18]
+    inflation_probability: 0.2
+    inflation_range: [1.2, 1.7]
+solver:
+  max_iterations: 5
+  region_radii: [2, 4, 6]
+  subproblem_time_limit_sec: 0.25
+  threads: 8
+  objective_weights:
+    makespan: 1.0
+    tardiness: 1.0
+    start_deviation: 0.15
+    machine_reassignment: 0.3
+baselines:
+  - full_reschedule
+  - plain_lbbd
+  - critical_path_lbbd
+  - random_region_lbbd
+  - rl_guided_lbbd
+training:
+  epochs: 20
+  episodes_per_epoch: 12
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  policy_lr: 0.0003
+  value_lr: 0.0003
+  entropy_coef: 0.01
+  value_coef: 0.5
+  max_grad_norm: 1.0
+  ppo_epochs: 4
+  minibatch_size: 32
+evaluation:
+  budgets_sec: [0.25, 0.5, 1.0]
+  aggregate_ci_bootstrap: 200

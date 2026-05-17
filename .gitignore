@@ -9,3 +9,8 @@
 *.out
 *.run.xml
 *.synctex.gz
+.venv/
+experiments/results/
+experiments/cache/
+__pycache__/
+*.pyc

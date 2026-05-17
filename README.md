@@ -27,6 +27,39 @@ At the moment, this repository contains the proposal source and PDF:
 
 The implementation will be built around a staged experimental program rather than a single end-to-end release.
 
+## Honest Status Check
+
+No, the repository has **not** yet completed the full conference-grade experimental package that would be needed to support the intended claims.
+
+What is already present:
+
+- the proposal and research framing;
+- a detailed experimental blueprint;
+- an initial minimal reproducible prototype for RL-guided region repair.
+
+What is **not** yet fully completed at paper-ready scale:
+
+- **small / medium / large** benchmark sweeps with fixed compute budgets;
+- a **broad baseline suite** spanning exact OR, decomposition, metaheuristics, and modern neural schedulers;
+- **out-of-distribution generalization** experiments across scale, flexibility, disturbance type, and benchmark family;
+- **component ablations** and **representation / reward / training** ablations;
+- **public / real benchmark** evaluation such as Brandimarte, Hurink, and related FJSP/JSSP families;
+- **multi-seed statistical reporting** with confidence intervals and paired significance tests;
+- solver-backend cross-checks and reviewer-facing backup experiments.
+
+In short: the current repo should be read as a **research buildout toward a top-tier paper**, not as a finished empirical package.
+
+## Literature-Grounded Experimental Expectations
+
+The experiment design below is aligned with the standards commonly seen in representative scheduling papers and surveys, especially:
+
+- **L2D**: *Learning to Dispatch for Job Shop Scheduling via Deep Reinforcement Learning* (2020), which set the pattern of comparing against hand-crafted dispatching rules and testing generalization to larger unseen instances;
+- **DAN**: *Flexible Job Shop Scheduling via Dual Attention Network Based Reinforcement Learning* (2023), which reinforced the expectation of using both synthetic data and public FJSP benchmarks;
+- **DRL-Guided Improvement Heuristic** (ICLR 2024), which raised the bar for improvement-based RL baselines and stronger local-search comparisons;
+- **Survey**: *Graph Neural Networks for Job Shop Scheduling Problems: A Survey* (2024), which makes clear that modern scheduling papers are increasingly judged on benchmark breadth, fair baseline coverage, generalization, and statistical rigor.
+
+That literature consensus is the reason this README now treats the following experimental package as the minimum scope for a credible conference submission.
+
 ## Proposed Method
 
 The proposal studies an **unrolled LBBD solver**:
@@ -57,6 +90,23 @@ The experiments should validate five central claims.
 5. **Attribution**: gains come from specific components of the proposed method, especially region selection, budget control, cut prioritization, imitation pretraining, and heterogeneous graph encoding.
 
 To satisfy reviewer expectations, the experimental narrative should be organized around these claims rather than around the implementation order.
+
+### 1.5. Minimum Experimental Package for a Top-Tier Submission
+
+If this work is to support a serious NeurIPS / ICLR / ICML / Operations Research style submission, the following blocks should all exist in some form.
+
+| Block | What must be run | Why reviewers will ask for it |
+|---|---|---|
+| Size ladder | small / medium / large instances under matched budgets | verifies scaling instead of cherry-picking one regime |
+| Broad baselines | exact, LBBD, heuristic, metaheuristic, neural | prevents the comparison set from looking narrow |
+| Public benchmarks | Brandimarte, Hurink, and related families | shows contact with established literature |
+| Dynamic benchmarks | converted repair tasks from static schedules + synthetic dynamic suites | demonstrates relevance to rescheduling rather than only static scheduling |
+| Generalization | ID, scale-OOD, flexibility-OOD, disturbance-OOD, family-OOD | supports claims beyond memorizing one generator |
+| Ablations | component, representation, reward, training protocol | proves where gains come from |
+| Statistical rigor | at least 5 seeds, CIs, paired tests, effect sizes | prevents single-run overclaiming |
+| Reviewer backups | equal-compute checks, long-budget exactness, solver-portability subset | de-risks predictable rebuttal attacks |
+
+Anything materially short of this matrix should be described as a **prototype** or **partial validation**, not as final paper evidence.
 
 ### 2. Datasets and Preprocessing
 
@@ -447,9 +497,24 @@ Recommended implementation order:
 
 1. build the disturbance generator and metric suite;
 2. implement a reproducible plain LBBD baseline;
-3. define the state, action, and reward interface for RL-Region-LBBD;
-4. collect expert trajectories for imitation pretraining;
-5. add PPO fine-tuning and anytime evaluation.
+3. add public benchmark loaders for Brandimarte / Hurink style families;
+4. define the state, action, and reward interface for RL-Region-LBBD;
+5. expand the baseline suite to CP-SAT, ALNS, dispatching, and neural comparators;
+6. collect expert trajectories for imitation pretraining;
+7. add PPO fine-tuning, multi-seed evaluation, and anytime curves;
+8. run the full generalization and ablation matrix before making strong paper claims.
+
+## README Scope Note
+
+This README now serves two purposes at once:
+
+- it documents the current repository honestly;
+- it defines the **experiment package that still needs to be executed** for the project to be submission-ready.
+
+Readers should therefore distinguish carefully between:
+
+- **what has been implemented or minimally run already**, and
+- **what is required for a conference-grade empirical section**.
 
 ## Citation / Source
 
