@@ -1,0 +1,116 @@
+experiment_name: first_priority_smoke
+output_root: experiments/results
+device: cuda
+seeds: [20260518]
+
+defaults:
+  data:
+    train_instances: 4
+    val_instances: 2
+    test_instances: 2
+    train_job_range: [4, 5]
+    test_job_range: [4, 5]
+    machines: 3
+    ops_per_job: [2, 3]
+    flexibility_choices: [2]
+    duration_range: [2, 6]
+    due_date_factor: 1.4
+    disturbance:
+      reschedule_fraction: 0.4
+      breakdown_duration_fraction: [0.08, 0.12]
+      inflation_probability: 0.15
+      inflation_range: [1.2, 1.4]
+  solver:
+    max_iterations: 4
+    region_radii: [2, 3]
+    subproblem_time_limit_sec: 0.1
+    threads: 4
+    objective_weights:
+      makespan: 1.0
+      tardiness: 1.0
+      start_deviation: 0.15
+      machine_reassignment: 0.3
+
+scenarios:
+  - name: id_small
+  - name: id_medium
+    data:
+      train_job_range: [6, 7]
+      test_job_range: [6, 7]
+      machines: 4
+      ops_per_job: [3, 4]
+      flexibility_choices: [2, 3]
+      duration_range: [2, 8]
+      due_date_factor: 1.45
+    solver:
+      region_radii: [2, 4]
+      subproblem_time_limit_sec: 0.12
+
+fixed_methods:
+  - full_reschedule
+  - plain_lbbd
+  - critical_path_lbbd
+  - random_region_lbbd
+
+learned_methods:
+  - name: bc_oracle_lbbd
+    family: learning
+    type: bc
+    training:
+      epochs: 4
+      batch_size: 16
+      learning_rate: 0.0005
+      max_examples: 64
+  - name: rl_guided_lbbd
+    family: learning
+    type: ppo
+    training:
+      epochs: 3
+      episodes_per_epoch: 4
+      gamma: 0.99
+      gae_lambda: 0.95
+      clip_ratio: 0.2
+      policy_lr: 0.0003
+      value_lr: 0.0003
+      entropy_coef: 0.01
+      value_coef: 0.5
+      max_grad_norm: 1.0
+      ppo_epochs: 2
+      minibatch_size: 16
+  - name: rl_no_radius_lbbd
+    family: ablation
+    type: ppo
+    region_radii: [3]
+    training:
+      epochs: 3
+      episodes_per_epoch: 4
+      gamma: 0.99
+      gae_lambda: 0.95
+      clip_ratio: 0.2
+      policy_lr: 0.0003
+      value_lr: 0.0003
+      entropy_coef: 0.01
+      value_coef: 0.5
+      max_grad_norm: 1.0
+      ppo_epochs: 2
+      minibatch_size: 16
+  - name: rl_sparse_reward_lbbd
+    family: ablation
+    type: ppo
+    reward_config:
+      step_penalty: 0.0
+      infeasible_penalty: 0.0
+      elapsed_penalty: 0.0
+    training:
+      epochs: 3
+      episodes_per_epoch: 4
+      gamma: 0.99
+      gae_lambda: 0.95
+      clip_ratio: 0.2
+      policy_lr: 0.0003
+      value_lr: 0.0003
+      entropy_coef: 0.01
+      value_coef: 0.5
+      max_grad_norm: 1.0
+      ppo_epochs: 2
+      minibatch_size: 16

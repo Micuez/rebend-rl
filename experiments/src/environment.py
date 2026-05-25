@@ -35,6 +35,8 @@ class RepairEnvironment:
         threads: int,
         max_iterations: int,
         seed: int,
+        action_strategies: Sequence[str] | None = None,
+        reward_config: Dict[str, float] | None = None,
     ) -> None:
         self.instance = instance
         self.baseline = baseline
@@ -45,7 +47,17 @@ class RepairEnvironment:
         self.threads = threads
         self.max_iterations = max_iterations
         self.rng = random.Random(seed)
-        self.action_space = [(strategy, radius) for strategy in ACTION_STRATEGIES for radius in self.radii]
+        self.action_strategies = list(action_strategies or ACTION_STRATEGIES)
+        self.reward_config = {
+            "step_penalty": 0.02,
+            "infeasible_penalty": 0.05,
+            "elapsed_penalty": 0.01,
+        }
+        if reward_config:
+            self.reward_config.update(reward_config)
+        self.action_space = [
+            (strategy, radius) for strategy in self.action_strategies for radius in self.radii
+        ]
         self.reset()
 
     def reset(self) -> np.ndarray:
@@ -79,10 +91,31 @@ class RepairEnvironment:
         return features
 
     def step(self, action_index: int):
+        preview = self.preview_action(action_index, preserve_rng=False)
+        if preview["accepted"]:
+            self.current = preview["candidate"]
+            self.metrics = preview["metrics"]
+        self.iteration += 1
+        done = self.iteration >= self.max_iterations
+        info = {
+            "strategy": preview["strategy"],
+            "radius": preview["radius"],
+            "feasible": preview["feasible"],
+            "objective": self.metrics["objective"],
+            "note": preview["note"],
+            "elapsed": preview["elapsed"],
+            "accepted": preview["accepted"],
+        }
+        return self.state(), preview["reward"], done, info
+
+    def preview_action(self, action_index: int, preserve_rng: bool = True) -> Dict[str, object]:
         strategy, radius = self.action_space[action_index]
+        rng_state = self.rng.getstate()
         unlocked = expand_region(
             self.instance, self.baseline, self.disturbance, strategy, radius, self.rng
         )
+        if preserve_rng:
+            self.rng.setstate(rng_state)
         feasible, candidate, metrics, elapsed, note = solve_repair(
             self.instance,
             self.baseline,
@@ -94,21 +127,22 @@ class RepairEnvironment:
             self.threads,
         )
         old_obj = self.metrics["objective"]
-        if feasible and metrics["objective"] < self.metrics["objective"]:
-            self.current = candidate
-            self.metrics = metrics
-        reward = (old_obj - self.metrics["objective"]) / max(1.0, old_obj) - 0.02
+        accepted = bool(feasible and metrics["objective"] < self.metrics["objective"])
+        next_metrics = metrics if accepted else self.metrics
+        reward = (old_obj - next_metrics["objective"]) / max(1.0, old_obj)
+        reward -= self.reward_config["step_penalty"]
         if not feasible:
-            reward -= 0.05
-        reward -= 0.01 * elapsed
-        self.iteration += 1
-        done = self.iteration >= self.max_iterations
-        info = {
+            reward -= self.reward_config["infeasible_penalty"]
+        reward -= self.reward_config["elapsed_penalty"] * elapsed
+        return {
             "strategy": strategy,
             "radius": radius,
             "feasible": feasible,
-            "objective": self.metrics["objective"],
+            "objective": next_metrics["objective"],
             "note": note,
             "elapsed": elapsed,
+            "accepted": accepted,
+            "candidate": candidate,
+            "metrics": next_metrics,
+            "reward": reward,
         }
-        return self.state(), reward, done, info

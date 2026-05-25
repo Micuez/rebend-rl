@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import yaml
 
@@ -50,6 +49,8 @@ def git_state(repo_root: Path) -> str:
 
 
 def save_plot(metrics_df: pd.DataFrame, output_path: Path) -> None:
+    import matplotlib.pyplot as plt
+
     plt.figure(figsize=(8, 5))
     summary = metrics_df.groupby("method")["objective"].mean().sort_values()
     summary.plot(kind="bar")
