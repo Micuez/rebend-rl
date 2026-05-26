@@ -1,4 +1,5 @@
-experiment_name: first_priority_id_rl_region_lbbd
+experiment_name: first_priority_disturbance_ood_rl_region_lbbd
+experiment_scope: "the Disturbance-OOD first-priority synthetic matrix"
 output_root: experiments/results
 device: cuda
 seeds: [20260518, 20260519, 20260520, 20260521, 20260522]
@@ -32,22 +33,24 @@ defaults:
       machine_reassignment: 0.3
 
 scenarios:
-  - name: id_small
-  - name: id_medium
+  - name: disturbance_ood_severe_breakdown
     data:
-      train_instances: 24
-      val_instances: 8
-      test_instances: 12
-      train_job_range: [9, 11]
-      test_job_range: [9, 11]
-      machines: 5
-      ops_per_job: [4, 6]
-      flexibility_choices: [2, 3, 4]
-      duration_range: [2, 12]
-      due_date_factor: 1.5
-    solver:
-      subproblem_time_limit_sec: 0.25
-      region_radii: [3, 5, 7]
+      disturbance:
+        breakdown_duration_fraction: [0.22, 0.38]
+        inflation_probability: 0.2
+        inflation_range: [1.2, 1.7]
+  - name: disturbance_ood_heavy_inflation
+    data:
+      disturbance:
+        breakdown_duration_fraction: [0.08, 0.18]
+        inflation_probability: 0.55
+        inflation_range: [1.6, 2.3]
+  - name: disturbance_ood_mixed_severe
+    data:
+      disturbance:
+        breakdown_duration_fraction: [0.18, 0.32]
+        inflation_probability: 0.45
+        inflation_range: [1.5, 2.2]
 
 fixed_methods:
   - full_reschedule
@@ -138,3 +141,18 @@ learned_methods:
       max_grad_norm: 1.0
       ppo_epochs: 4
       minibatch_size: 32
+
+known_risks:
+  - Public benchmark and Scale-OOD blocks are deferred from this Disturbance-OOD run.
+  - Disturbance-OOD uses the existing breakdown plus duration-inflation generator; new-order and urgent-order disturbances are not yet implemented.
+  - The full-reschedule reference remains a greedy disturbed reschedule, not a global exact recomputation.
+
+deviations:
+  - This slice completes Disturbance-OOD synthetic evaluation only; public benchmarks remain out of scope.
+  - The implemented disturbance generator covers breakdown and processing-time inflation, but not new-order arrivals or urgent job insertions.
+  - Confidence intervals are bootstrap CIs over executed runs; paired significance testing is not implemented in this first-priority runner yet.
+
+next_steps:
+  - Compare Disturbance-OOD results against the completed ID matrix.
+  - Implement new-order and urgent-job disturbance generators.
+  - Add a public benchmark subset and replace the greedy full_reschedule reference with a true global CP-SAT recomputation baseline.

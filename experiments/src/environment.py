@@ -49,9 +49,11 @@ class RepairEnvironment:
         self.rng = random.Random(seed)
         self.action_strategies = list(action_strategies or ACTION_STRATEGIES)
         self.reward_config = {
-            "step_penalty": 0.02,
+            "step_penalty": 0.005,
             "infeasible_penalty": 0.05,
-            "elapsed_penalty": 0.01,
+            "elapsed_penalty": 0.002,
+            "accepted_bonus": 0.02,
+            "rejected_penalty": 0.005,
         }
         if reward_config:
             self.reward_config.update(reward_config)
@@ -66,6 +68,7 @@ class RepairEnvironment:
             self.instance, self.baseline, self.current, self.disturbance, self.weights
         )
         self.current.objective = self.metrics["objective"]
+        self.initial_objective = max(self.metrics["objective"], 1.0)
         self.iteration = 0
         return self.state()
 
@@ -74,6 +77,7 @@ class RepairEnvironment:
         critical_values = sorted(scores.values(), reverse=True)
         top_scores = critical_values[:3] + [0.0] * max(0, 3 - len(critical_values))
         base_obj = max(self.metrics["objective"], 1.0)
+        horizon = max(max(item.end for item in self.baseline.assignments.values()), 1)
         features = np.array(
             [
                 self.iteration / max(1, self.max_iterations),
@@ -82,9 +86,9 @@ class RepairEnvironment:
                 self.metrics["start_deviation"] / base_obj,
                 self.metrics["machine_reassignment"] / max(1, len(self.instance.operations)),
                 self.disturbance.breakdown.machine_id / max(1, self.instance.num_machines - 1),
-                self.disturbance.breakdown.end - self.disturbance.breakdown.start,
-                self.disturbance.reschedule_time,
-                *top_scores,
+                (self.disturbance.breakdown.end - self.disturbance.breakdown.start) / horizon,
+                self.disturbance.reschedule_time / horizon,
+                *[score / horizon for score in top_scores],
             ],
             dtype=np.float32,
         )
@@ -129,10 +133,14 @@ class RepairEnvironment:
         old_obj = self.metrics["objective"]
         accepted = bool(feasible and metrics["objective"] < self.metrics["objective"])
         next_metrics = metrics if accepted else self.metrics
-        reward = (old_obj - next_metrics["objective"]) / max(1.0, old_obj)
+        reward = (old_obj - next_metrics["objective"]) / self.initial_objective
         reward -= self.reward_config["step_penalty"]
         if not feasible:
             reward -= self.reward_config["infeasible_penalty"]
+        if accepted:
+            reward += self.reward_config["accepted_bonus"]
+        else:
+            reward -= self.reward_config["rejected_penalty"]
         reward -= self.reward_config["elapsed_penalty"] * elapsed
         return {
             "strategy": strategy,

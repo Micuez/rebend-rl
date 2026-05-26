@@ -33,10 +33,13 @@ The core goal of `rebend-rl` is not to train a black-box policy that directly ou
 **中文**  
 根据两个 README 与当前实验目录，仓库目前处于“研究构想明确、最小原型已跑通、顶会级完整实验尚未补齐”的阶段。当前已有：
 
-- 方法提案与实验蓝图；
-- 最小可复现实验配置 `experiments/configs/minimal_repro.yaml`；
-- 一个最小 RL-guided region repair 原型；
-- 最近一次原型结果中，`rl_guided_lbbd` 在该最小设置下优于 `plain_lbbd`、`critical_path_lbbd`、`random_region_lbbd` 和 `full_reschedule`。
+- ~~方法提案与实验蓝图；~~
+- ~~最小可复现实验配置 `experiments/configs/minimal_repro.yaml`；~~
+- ~~一个最小 RL-guided region repair 原型；~~
+- ~~最近一次原型结果中，`rl_guided_lbbd` 在该最小设置下优于 `plain_lbbd`、`critical_path_lbbd`、`random_region_lbbd` 和 `full_reschedule`。~~
+- ~~第一优先级 synthetic ID 小/中规模 5-seed 矩阵已执行：`latest_first_priority_id_rl_region_lbbd/`。~~
+- ~~Scale-OOD 与 Disturbance-OOD synthetic 矩阵已执行：`latest_first_priority_scale_ood_rl_region_lbbd/` 与 `latest_first_priority_disturbance_ood_rl_region_lbbd/`。~~
+- ~~medium-to-large scale fallback proposed mode 已做 targeted 修复验证：`latest_medium_large_training_fix_rl_region_lbbd/`。~~ 但纯 PPO policy 仍未稳定优于 plain LBBD，后续需继续改表示/训练。
 
 **English**  
 Based on the two READMEs and the current experiment artifacts, the repository is at the stage of having a clear research proposal and a minimally working prototype, but not yet a conference-grade empirical package. What already exists includes:
@@ -45,6 +48,9 @@ Based on the two READMEs and the current experiment artifacts, the repository is
 - a minimal reproducible config at `experiments/configs/minimal_repro.yaml`;
 - a minimal RL-guided region-repair prototype;
 - recent prototype evidence where `rl_guided_lbbd` outperforms `plain_lbbd`, `critical_path_lbbd`, `random_region_lbbd`, and `full_reschedule` under the current minimal setting.
+- first-priority synthetic ID small/medium 5-seed matrix under `latest_first_priority_id_rl_region_lbbd/`;
+- Scale-OOD and Disturbance-OOD synthetic matrices under `latest_first_priority_scale_ood_rl_region_lbbd/` and `latest_first_priority_disturbance_ood_rl_region_lbbd/`;
+- targeted medium-to-large fallback proposed-mode validation under `latest_medium_large_training_fix_rl_region_lbbd/`, while pure PPO remains insufficiently stable against plain LBBD.
 
 ## 3. Submission-Level Objective / 投稿级目标
 
@@ -122,8 +128,8 @@ If the target is `NeurIPS/ICLR`, the paper should avoid reading like an engineer
 **中文**  
 在只有 2 张 3090 的前提下，这个矩阵不能一次性全开，必须分层推进：
 
-1. 第一优先级：`ID + 小中规模 + 分解类基线 + 少量学习基线 + 核心消融`。  
-2. 第二优先级：`Scale-OOD + Disturbance-OOD + 公共 benchmark 子集`。  
+1. ~~第一优先级：`ID + 小中规模 + 分解类基线 + 少量学习基线 + 核心消融`。~~  
+2. 第二优先级：~~`Scale-OOD + Disturbance-OOD`~~ + `公共 benchmark 子集`。  
 3. 第三优先级：`Family-OOD 全量、solver-backend portability、最重的 reviewer backup`。
 
 这意味着第一版投稿策略更适合做成：**问题定义清晰、主张集中、证据闭环强，但规模矩阵经过算力裁剪**。
@@ -131,8 +137,8 @@ If the target is `NeurIPS/ICLR`, the paper should avoid reading like an engineer
 **English**  
 With only 2 RTX 3090 GPUs, this matrix cannot be fully expanded at once and must be layered:
 
-1. First priority: `ID + small/medium scale + decomposition baselines + a small set of learning baselines + core ablations`.
-2. Second priority: `Scale-OOD + Disturbance-OOD + a subset of public benchmarks`.
+1. ~~First priority: `ID + small/medium scale + decomposition baselines + a small set of learning baselines + core ablations`.~~
+2. Second priority: ~~`Scale-OOD + Disturbance-OOD`~~ + `a subset of public benchmarks`.
 3. Third priority: `full Family-OOD, solver-backend portability, and the heaviest reviewer-facing backup experiments`.
 
 That means the first submission strategy should likely be: **clear problem definition, focused claims, and a strong closed evidence loop, with the full matrix trimmed to match available compute**.
@@ -320,13 +326,13 @@ For 2 RTX 3090 GPUs, I recommend the following practical training setup:
 
 | Phase | 中文目标 | English goal | Exit criterion / 通过标准 |
 |---|---|---|---|
-| P1 | 固化最小原型与日志协议 | Stabilize the minimal prototype and logging protocol | 所有 runs 可复现，结果文件齐全 |
+| P1 | ~~固化最小原型与日志协议~~ | ~~Stabilize the minimal prototype and logging protocol~~ | ~~所有 runs 可复现，结果文件齐全~~ |
 | P2 | 建立 plain LBBD 与公共 benchmark loader | Build plain LBBD and public benchmark loaders | 能在公共实例上稳定运行 paired repair |
-| P3 | 扩充动态扰动生成器与指标体系 | Expand disturbance generator and metric suite | 支持多扰动、paired evaluation、AUC 统计 |
-| P4 | 跑完优化/分解/启发式第一轮基线 | Run first full baseline sweep | 至少得到小中规模完整基线表 |
+| P3 | ~~扩充动态扰动生成器与指标体系（breakdown + processing-time inflation 子集）~~ | ~~Expand disturbance generator and metric suite (breakdown + processing-time inflation subset)~~ | 支持多扰动、paired evaluation、AUC 统计 |
+| P4 | ~~跑完优化/分解/启发式第一轮 synthetic 基线~~ | ~~Run first synthetic baseline sweep~~ | 至少得到小中规模完整基线表 |
 | P5 | 建立 imitation pretraining 数据池 | Build imitation pretraining data | 至少 `100k` state-action pairs |
-| P6 | 完成 PPO 多种子训练 | Complete multi-seed PPO training | 至少 `5` 个独立训练种子 |
-| P7 | 完成 ID + OOD + ablation 主矩阵 | Complete ID, OOD, and ablation matrices | 主表、泛化表、消融表齐备 |
+| P6 | ~~完成 PPO 多种子训练（ID/Scale-OOD/Disturbance-OOD synthetic 5 seeds）~~ | ~~Complete multi-seed PPO training (ID/Scale-OOD/Disturbance-OOD synthetic 5 seeds)~~ | 至少 `5` 个独立训练种子 |
+| P7 | ~~完成 ID + Scale-OOD + Disturbance-OOD + core ablation synthetic 矩阵~~ | ~~Complete ID + Scale-OOD + Disturbance-OOD + core ablation synthetic matrices~~ | 主表、泛化表、消融表齐备 |
 | P8 | 完成 reviewer backup 实验 | Complete reviewer-facing backup experiments | 等算力、长预算、后端迁移证据齐备 |
 | P9 | 形成 paper-ready artifact | Produce paper-ready artifact package | 代码、日志、配置、图表、统计脚本可公开 |
 
@@ -336,8 +342,8 @@ For 2 RTX 3090 GPUs, I recommend the following practical training setup:
 如果按当前算力推进，第一版论文更现实的通过线应是：
 
 1. 小中规模 ID 结果显著稳定优于 plain LBBD 和关键基线。
-2. 至少完成 `Scale-OOD` 与 `Disturbance-OOD` 两类泛化实验。
-3. 至少完成 `核心组件递进消融 + 表示消融`。
+2. ~~至少完成 `Scale-OOD` 与 `Disturbance-OOD` 两类泛化实验。~~
+3. ~~至少完成 `核心组件递进消融`~~ + `表示消融`。
 4. 至少有一个公开 benchmark family 子集结果。
 5. 至少一个强学习基线或强改进式基线作为 neural comparator。
 
@@ -347,8 +353,8 @@ For 2 RTX 3090 GPUs, I recommend the following practical training setup:
 Under the current compute setup, a more realistic first-paper threshold is:
 
 1. Stable and significant gains over plain LBBD and key baselines on small/medium ID tasks.
-2. At least two generalization tracks: `Scale-OOD` and `Disturbance-OOD`.
-3. At least `incremental core-component ablations + representation ablations`.
+2. ~~At least two generalization tracks: `Scale-OOD` and `Disturbance-OOD`.~~
+3. ~~At least `incremental core-component ablations`~~ + `representation ablations`.
 4. Results on at least one subset of a public benchmark family.
 5. At least one strong neural or improvement-based comparator.
 
@@ -359,8 +365,8 @@ If these are not in place, I would not recommend calling it a full `NeurIPS/ICLR
 **中文**  
 主文建议至少包含 4 个主表和 5 组主图：
 
-1. ID 主结果表：`Obj_norm`、Anytime AUC、Feasibility、Stability、Time-to-feasible。
-2. OOD 泛化表：Scale-OOD、Flexibility-OOD、Disturbance-OOD、Family-OOD。
+1. ~~ID 主结果表：`Obj_norm`、Feasibility、Stability 子集。~~ Anytime AUC 与 Time-to-feasible 仍需补齐。
+2. OOD 泛化表：~~Scale-OOD、Disturbance-OOD~~、Flexibility-OOD、Family-OOD。
 3. 扰动类型分解表：breakdown、arrival、processing-time shift、urgent jobs、mixed。
 4. 效率与成本表：runtime、GPU cost、CPU cost、training cost、test cost，并明确 2x3090 训练设置。
 5. Anytime 曲线图。
@@ -372,8 +378,8 @@ If these are not in place, I would not recommend calling it a full `NeurIPS/ICLR
 **English**  
 The main paper should contain at least four key tables and five figure groups:
 
-1. ID main results table with `Obj_norm`, Anytime AUC, Feasibility, Stability, and Time-to-feasible.
-2. OOD generalization table over Scale-OOD, Flexibility-OOD, Disturbance-OOD, and Family-OOD.
+1. ~~ID main results table with `Obj_norm`, Feasibility, and Stability subset.~~ Anytime AUC and time-to-feasible remain missing.
+2. OOD generalization table over ~~Scale-OOD~~, Flexibility-OOD, ~~Disturbance-OOD~~, and Family-OOD.
 3. Disturbance-type breakdown table.
 4. Efficiency and cost table, explicitly reporting the 2x3090 training setup.
 5. Anytime curve figure.
@@ -450,13 +456,13 @@ The project should be described as conference-ready only if all of the following
 
 | Priority | 中文 | English |
 |---|---|---|
-| 1 | 固化当前最小原型的 run contract、日志字段和评测脚本 | Freeze the run contract, logging schema, and evaluation scripts for the current minimal prototype |
-| 2 | 先完成 plain LBBD 与 dynamic generator 的稳定版本 | Finish stable plain LBBD and dynamic generator implementations |
+| 1 | ~~固化当前最小原型的 run contract、日志字段和评测脚本~~ | ~~Freeze the run contract, logging schema, and evaluation scripts for the current minimal prototype~~ |
+| 2 | ~~先完成 plain LBBD 与 dynamic generator 的 stable synthetic 版本~~ | ~~Finish stable synthetic plain LBBD and dynamic generator implementations~~ |
 | 3 | 接入 Brandimarte / Hurink loader，形成公共 benchmark 线 | Add Brandimarte / Hurink loaders to establish the public benchmark track |
 | 4 | 扩展 baseline 到 CP-SAT、ALNS、dispatching rules | Expand baselines to CP-SAT, ALNS, and dispatching rules |
-| 5 | 做 imitation pretraining 数据采集和专家轨迹生成 | Collect expert trajectories for imitation pretraining |
-| 6 | 启动 PPO 多种子训练与 anytime 曲线评测 | Launch multi-seed PPO training and anytime-curve evaluation |
-| 7 | 跑 OOD 与消融矩阵 | Run OOD and ablation matrices |
+| 5 | ~~做轻量 imitation warm-start 数据采集~~；仍需 `100k` 级专家轨迹 | ~~Collect lightweight imitation warm-start data~~; still need 100k-scale expert trajectories |
+| 6 | ~~启动 PPO 多种子训练~~；anytime 曲线评测未完成 | ~~Launch multi-seed PPO training~~; anytime-curve evaluation remains incomplete |
+| 7 | ~~跑 synthetic Scale-OOD / Disturbance-OOD 与核心消融矩阵~~ | ~~Run synthetic Scale-OOD / Disturbance-OOD and core ablation matrices~~ |
 | 8 | 补 reviewer backup 和最终图表统计 | Add reviewer backup experiments and final figures/statistics |
 
 ### 17.1 Recommended First Submission Scope / 建议的第一版投稿范围

@@ -1,20 +1,21 @@
-experiment_name: first_priority_id_rl_region_lbbd
+experiment_name: medium_large_training_fix_rl_region_lbbd
+experiment_scope: "a targeted medium/large scale-generalization and reward-stability fix validation"
 output_root: experiments/results
 device: cuda
-seeds: [20260518, 20260519, 20260520, 20260521, 20260522]
+seeds: [20260518, 20260519]
 
 defaults:
   data:
     train_instances: 24
     val_instances: 8
     test_instances: 12
-    train_job_range: [6, 8]
-    test_job_range: [6, 8]
-    machines: 4
-    ops_per_job: [3, 5]
-    flexibility_choices: [2, 3]
-    duration_range: [2, 10]
-    due_date_factor: 1.45
+    train_job_range: [9, 11]
+    test_job_range: [12, 14]
+    machines: 5
+    ops_per_job: [4, 6]
+    flexibility_choices: [2, 3, 4]
+    duration_range: [2, 12]
+    due_date_factor: 1.5
     disturbance:
       reschedule_fraction: 0.45
       breakdown_duration_fraction: [0.08, 0.18]
@@ -22,8 +23,8 @@ defaults:
       inflation_range: [1.2, 1.7]
   solver:
     max_iterations: 5
-    region_radii: [2, 4, 6]
-    subproblem_time_limit_sec: 0.2
+    region_radii: [3, 5, 7]
+    subproblem_time_limit_sec: 0.25
     threads: 8
     objective_weights:
       makespan: 1.0
@@ -32,22 +33,7 @@ defaults:
       machine_reassignment: 0.3
 
 scenarios:
-  - name: id_small
-  - name: id_medium
-    data:
-      train_instances: 24
-      val_instances: 8
-      test_instances: 12
-      train_job_range: [9, 11]
-      test_job_range: [9, 11]
-      machines: 5
-      ops_per_job: [4, 6]
-      flexibility_choices: [2, 3, 4]
-      duration_range: [2, 12]
-      due_date_factor: 1.5
-    solver:
-      subproblem_time_limit_sec: 0.25
-      region_radii: [3, 5, 7]
+  - name: scale_ood_medium_to_large_fixed
 
 fixed_methods:
   - full_reschedule
@@ -60,54 +46,55 @@ learned_methods:
     family: learning
     type: bc
     training:
-      epochs: 12
+      teacher: heuristic
+      epochs: 8
       batch_size: 32
       learning_rate: 0.0005
-      max_examples: 256
+      max_examples: 96
   - name: rl_guided_lbbd
     family: learning
     type: ppo
     fallback_method: plain_lbbd
     imitation_pretrain:
       teacher: heuristic
-      epochs: 8
+      epochs: 4
       batch_size: 32
       learning_rate: 0.0005
-      max_examples: 256
+      max_examples: 96
     training:
-      epochs: 10
-      episodes_per_epoch: 8
+      epochs: 5
+      episodes_per_epoch: 5
       gamma: 0.99
       gae_lambda: 0.95
       clip_ratio: 0.2
-      policy_lr: 0.0003
-      value_lr: 0.0003
-      entropy_coef: 0.01
+      policy_lr: 0.0002
+      value_lr: 0.0002
+      entropy_coef: 0.005
       value_coef: 0.5
-      max_grad_norm: 1.0
+      max_grad_norm: 0.75
       ppo_epochs: 4
       minibatch_size: 32
   - name: rl_no_radius_lbbd
     family: ablation
     type: ppo
-    region_radii: [4]
+    region_radii: [5]
     imitation_pretrain:
       teacher: heuristic
-      epochs: 8
+      epochs: 4
       batch_size: 32
       learning_rate: 0.0005
-      max_examples: 256
+      max_examples: 96
     training:
-      epochs: 10
-      episodes_per_epoch: 8
+      epochs: 5
+      episodes_per_epoch: 5
       gamma: 0.99
       gae_lambda: 0.95
       clip_ratio: 0.2
-      policy_lr: 0.0003
-      value_lr: 0.0003
-      entropy_coef: 0.01
+      policy_lr: 0.0002
+      value_lr: 0.0002
+      entropy_coef: 0.005
       value_coef: 0.5
-      max_grad_norm: 1.0
+      max_grad_norm: 0.75
       ppo_epochs: 4
       minibatch_size: 32
   - name: rl_sparse_reward_lbbd
@@ -121,20 +108,32 @@ learned_methods:
       rejected_penalty: 0.0
     imitation_pretrain:
       teacher: heuristic
-      epochs: 8
+      epochs: 4
       batch_size: 32
       learning_rate: 0.0005
-      max_examples: 256
+      max_examples: 96
     training:
-      epochs: 10
-      episodes_per_epoch: 8
+      epochs: 5
+      episodes_per_epoch: 5
       gamma: 0.99
       gae_lambda: 0.95
       clip_ratio: 0.2
-      policy_lr: 0.0003
-      value_lr: 0.0003
-      entropy_coef: 0.01
+      policy_lr: 0.0002
+      value_lr: 0.0002
+      entropy_coef: 0.005
       value_coef: 0.5
-      max_grad_norm: 1.0
+      max_grad_norm: 0.75
       ppo_epochs: 4
       minibatch_size: 32
+
+known_risks:
+  - This is a targeted 3-seed validation of training and representation fixes, not the final 5-seed paper matrix.
+  - Public benchmark and exact full-reschedule baselines remain out of scope.
+
+deviations:
+  - This run validates the medium-to-large Scale-OOD failure mode after normalized state features and imitation-warm-started PPO.
+  - The run uses 2 seeds and reduced warm-start examples to keep iteration time bounded before re-running the full 5-seed matrix.
+
+next_steps:
+  - If the targeted fix passes, re-run the full ID and Scale-OOD matrices with 5 seeds.
+  - Add paired statistical tests before claiming significance.

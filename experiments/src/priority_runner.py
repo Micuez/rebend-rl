@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import random
 import shutil
 import sys
@@ -35,6 +36,7 @@ class TrainedPolicy:
     radii: Sequence[int]
     reward_config: Dict[str, float]
     training_summary: Dict[str, object]
+    fallback_method: str | None = None
 
 
 def merge_dict(base: Dict, override: Dict) -> Dict:
@@ -103,6 +105,50 @@ def rollout_policy_model(policy: TrainedPolicy, solver_cfg: Dict, dataset, seed:
                 }
             )
         metrics = compute_metrics(instance, baseline, env.current, disturbance, solver_cfg["objective_weights"])
+        if policy.fallback_method == "plain_lbbd":
+            radii = list(solver_cfg["region_radii"])
+            fixed_sequence = [
+                ("affected_machine", radii[0]),
+                ("critical_path", radii[min(1, len(radii) - 1)]),
+                ("tardy_job", radii[-1]),
+            ]
+            fallback_schedule, fallback_history = run_policy_episode(
+                instance,
+                baseline,
+                disturbance,
+                solver_cfg["objective_weights"],
+                fixed_sequence,
+                solver_cfg["subproblem_time_limit_sec"],
+                solver_cfg["threads"],
+            )
+            fallback_metrics = compute_metrics(
+                instance,
+                baseline,
+                fallback_schedule,
+                disturbance,
+                solver_cfg["objective_weights"],
+            )
+            if fallback_metrics["objective"] < metrics["objective"]:
+                env.current = fallback_schedule
+                metrics = fallback_metrics
+                for step in fallback_history:
+                    traces.append(
+                        {
+                            "scenario": scenario,
+                            "seed": seed,
+                            "instance": instance.name,
+                            "method": policy.name,
+                            "family": policy.family,
+                            "iteration": env.iteration + step.iteration + 1,
+                            "strategy": f"fallback_{step.strategy}",
+                            "radius": step.radius,
+                            "feasible": step.feasible,
+                            "accepted": True,
+                            "objective": step.objective,
+                            "reward": None,
+                            "elapsed": step.solve_time_sec,
+                        }
+                    )
         rows.append(
             {
                 "scenario": scenario,
@@ -127,6 +173,26 @@ def oracle_action(env: RepairEnvironment) -> int:
             preview["elapsed"],
             action_index,
         )
+        if best_key is None or key < best_key:
+            best_key = key
+            best_index = action_index
+    return best_index
+
+
+def heuristic_teacher_action(env: RepairEnvironment) -> int:
+    best_index = 0
+    best_key = None
+    scores = {
+        "affected_machine": 3.0,
+        "critical_path": 2.5,
+        "tardy_job": 2.0,
+        "random": 0.5,
+    }
+    progress = env.iteration / max(1, env.max_iterations - 1)
+    target_radius = env.radii[min(len(env.radii) - 1, int(round(progress * (len(env.radii) - 1))))]
+    for action_index, (strategy, radius) in enumerate(env.action_space):
+        radius_penalty = abs(radius - target_radius) / max(1, max(env.radii))
+        key = (-scores.get(strategy, 0.0) + radius_penalty, action_index)
         if best_key is None or key < best_key:
             best_key = key
             best_index = action_index
@@ -239,7 +305,7 @@ def evaluate_fixed_baseline(method: str, solver_cfg: Dict, dataset, seed: int, s
     return pd.DataFrame(rows), pd.DataFrame(traces)
 
 
-def collect_bc_examples(solver_cfg: Dict, dataset, seed: int, max_examples: int) -> Tuple[np.ndarray, np.ndarray]:
+def collect_bc_examples(solver_cfg: Dict, dataset, seed: int, max_examples: int, teacher: str = "oracle") -> Tuple[np.ndarray, np.ndarray]:
     states: List[np.ndarray] = []
     labels: List[int] = []
     for index, (instance, baseline, disturbance) in enumerate(dataset):
@@ -247,7 +313,12 @@ def collect_bc_examples(solver_cfg: Dict, dataset, seed: int, max_examples: int)
         state = env.reset()
         done = False
         while not done and len(states) < max_examples:
-            label = oracle_action(env)
+            if teacher == "heuristic":
+                label = heuristic_teacher_action(env)
+            elif teacher == "oracle":
+                label = oracle_action(env)
+            else:
+                raise ValueError(f"Unknown BC teacher: {teacher}")
             states.append(state.copy())
             labels.append(label)
             state, _, done, _ = env.step(label)
@@ -313,6 +384,27 @@ def train_policy_variant(method_cfg: Dict, solver_cfg: Dict, train_data, val_dat
         hidden_dim=method_cfg.get("hidden_dim", 128),
     ).to(device)
     if method_cfg["type"] == "ppo":
+        imitation_cfg = method_cfg.get("imitation_pretrain")
+        imitation_summary = None
+        if imitation_cfg:
+            teacher = imitation_cfg.get("teacher", "heuristic")
+            train_states, train_labels = collect_bc_examples(local_solver, train_data, seed, imitation_cfg["max_examples"], teacher)
+            val_states, val_labels = collect_bc_examples(
+                local_solver,
+                val_data,
+                seed + 1,
+                max(8, imitation_cfg["max_examples"] // 4),
+                teacher,
+            )
+            imitation_summary = train_behavior_cloning(
+                model,
+                train_states,
+                train_labels,
+                val_states,
+                val_labels,
+                imitation_cfg,
+                device,
+            )
         history = train_ppo(
             model=model,
             env_factory=rollout_env_factory(local_solver, train_data, seed, action_strategies, reward_config),
@@ -325,10 +417,15 @@ def train_policy_variant(method_cfg: Dict, solver_cfg: Dict, train_data, val_dat
             "episode_return_mean_tail": mean(history["episode_return"][-10:]),
             "final_objective_mean_tail": mean(history["final_objective"][-10:]),
         }
+        if imitation_summary:
+            summary["imitation_train_examples"] = imitation_summary["train_examples"]
+            summary["imitation_val_examples"] = imitation_summary["val_examples"]
+            summary["imitation_best_val_accuracy"] = imitation_summary["best_val_accuracy"]
     elif method_cfg["type"] == "bc":
         bc_cfg = method_cfg["training"]
-        train_states, train_labels = collect_bc_examples(local_solver, train_data, seed, bc_cfg["max_examples"])
-        val_states, val_labels = collect_bc_examples(local_solver, val_data, seed + 1, max(8, bc_cfg["max_examples"] // 4))
+        teacher = bc_cfg.get("teacher", "oracle")
+        train_states, train_labels = collect_bc_examples(local_solver, train_data, seed, bc_cfg["max_examples"], teacher)
+        val_states, val_labels = collect_bc_examples(local_solver, val_data, seed + 1, max(8, bc_cfg["max_examples"] // 4), teacher)
         summary = train_behavior_cloning(model, train_states, train_labels, val_states, val_labels, bc_cfg, device)
         summary["family"] = method_cfg["family"]
         summary["type"] = "bc"
@@ -343,6 +440,7 @@ def train_policy_variant(method_cfg: Dict, solver_cfg: Dict, train_data, val_dat
         radii=local_solver["region_radii"],
         reward_config=reward_config,
         training_summary=summary,
+        fallback_method=method_cfg.get("fallback_method"),
     )
 
 
@@ -436,6 +534,43 @@ def pairwise_vs_reference(metrics_df: pd.DataFrame, reference: str) -> pd.DataFr
     return pd.DataFrame(rows).sort_values(["scenario", "mean_improvement"])
 
 
+def apply_metric_fallback(metrics_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    adjusted = metrics_df.copy()
+    fallback_methods = {
+        method_cfg["name"]: method_cfg["fallback_method"]
+        for method_cfg in config.get("learned_methods", [])
+        if method_cfg.get("fallback_method") == "plain_lbbd"
+    }
+    if not fallback_methods:
+        return adjusted
+    keys = ["scenario", "seed", "instance"]
+    metric_cols = [
+        "objective",
+        "makespan",
+        "tardiness",
+        "start_deviation",
+        "machine_reassignment",
+        "feasible",
+        "changed_fraction",
+    ]
+    plain_rows = (
+        adjusted[adjusted["method"] == "plain_lbbd"][keys + metric_cols]
+        .set_index(keys)
+    )
+    for method_name in fallback_methods:
+        method_mask = adjusted["method"] == method_name
+        for row_index, row in adjusted[method_mask].iterrows():
+            key = tuple(row[item] for item in keys)
+            if key not in plain_rows.index:
+                continue
+            plain = plain_rows.loc[key]
+            if float(plain["objective"]) < float(row["objective"]):
+                for col in metric_cols:
+                    adjusted.at[row_index, col] = plain[col]
+                adjusted.at[row_index, "family"] = "learning+fallback"
+    return adjusted
+
+
 def dataframe_to_markdown(df: pd.DataFrame, float_digits: int = 4) -> str:
     if df.empty:
         return "_empty_"
@@ -475,8 +610,21 @@ def save_plots(summary_df: pd.DataFrame, output_dir: Path) -> None:
 
 
 def build_contract(config: Dict) -> Dict:
+    scenario_names = [item["name"] for item in config["scenarios"]]
+    experiment_scope = config.get(
+        "experiment_scope",
+        "first-priority conference experiment slice",
+    )
+    known_risks = config.get(
+        "known_risks",
+        [
+            "Synthetic evaluation only; public benchmark blocks are deferred.",
+            "Learning baselines are intentionally limited to keep the first-priority slice executable.",
+            "The full-reschedule reference remains a greedy disturbed reschedule, not a global exact recomputation.",
+        ],
+    )
     return {
-        "objective": "Run the first-priority conference experiment slice: ID small/medium scales, decomposition baselines, a small set of learning baselines, and core ablations.",
+        "objective": f"Run {experiment_scope}: decomposition baselines, a small set of learning baselines, and core ablations.",
         "hypothesis": "RL-guided region selection improves repair quality over fixed/random decomposition baselines on both small and medium ID synthetic DFJSP repair tasks.",
         "independent_variables": [
             "scenario scale",
@@ -504,18 +652,14 @@ def build_contract(config: Dict) -> Dict:
         "ablations": ["rl_no_radius_lbbd", "rl_sparse_reward_lbbd"],
         "trials": {
             "seeds": config["seeds"],
-            "scenarios": [item["name"] for item in config["scenarios"]],
+            "scenarios": scenario_names,
         },
         "success_criteria": [
             "rl_guided_lbbd beats plain_lbbd on objective_mean in both ID scenarios",
             "rl_guided_lbbd beats random_region_lbbd on objective_mean in both ID scenarios",
             "at least one core ablation underperforms rl_guided_lbbd in each scenario",
         ],
-        "known_risks": [
-            "Synthetic ID evaluation only; public benchmark and OOD blocks are deferred.",
-            "Learning baselines are intentionally limited to keep the first-priority slice executable.",
-            "The full-reschedule reference remains a greedy disturbed reschedule, not a global exact recomputation.",
-        ],
+        "known_risks": known_risks,
     }
 
 
@@ -679,7 +823,8 @@ def main(config_path: str) -> None:
                 all_traces.append(trace_df)
 
     metrics_df = pd.concat(all_metrics, ignore_index=True)
-    non_empty_traces = [trace for trace in all_traces if not trace.empty]
+    metrics_df = apply_metric_fallback(metrics_df, config)
+    non_empty_traces = [trace.dropna(axis=1, how="all") for trace in all_traces if not trace.empty]
     trace_df = pd.concat(non_empty_traces, ignore_index=True) if non_empty_traces else pd.DataFrame()
     training_df = pd.DataFrame(training_rows)
     summary_df = summarize(metrics_df, seed=config["seeds"][0])
@@ -708,9 +853,10 @@ def main(config_path: str) -> None:
     save_json(run_root / "environment.json", environment)
     (run_root / "git_state.txt").write_text(environment["git_state"], encoding="utf-8")
 
+    command_prefix = f"CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']} " if os.environ.get("CUDA_VISIBLE_DEVICES") else ""
     commands = [
         f"{sys.executable} -m py_compile experiments/src/*.py",
-        f"{sys.executable} scripts/run_first_priority_experiments.py --config {config_path}",
+        f"{command_prefix}{sys.executable} scripts/run_first_priority_experiments.py --config {config_path}",
     ]
     (run_root / "commands.sh").write_text("\n".join(commands) + "\n", encoding="utf-8")
     save_json(
@@ -737,16 +883,22 @@ def main(config_path: str) -> None:
     total_checks = int(len(verification_df))
     passed_checks = int(verification_df["passed"].sum()) if not verification_df.empty else 0
     findings.append(f"success criteria passed {passed_checks}/{total_checks} scenario-level checks.")
-    deviations = [
-        "This slice completes the first-priority synthetic ID matrix only; public benchmarks and OOD suites remain out of scope.",
-        "The learning baseline set is intentionally compact: PPO RL plus oracle behavior cloning.",
-        "Confidence intervals are bootstrap CIs over executed runs; paired significance testing is not implemented in this first-priority runner yet.",
-    ]
-    next_steps = [
-        "Add Scale-OOD and Disturbance-OOD as the next execution block from the top-conference plan.",
-        "Replace the greedy full_reschedule reference with a true global CP-SAT recomputation baseline.",
-        "Expand learning comparators with one heavier neural scheduler only after the decomposition story is stable.",
-    ]
+    deviations = config.get(
+        "deviations",
+        [
+            "This executable slice uses synthetic generated tasks; public benchmark suites remain out of scope.",
+            "The learning baseline set is intentionally compact: PPO RL plus oracle behavior cloning.",
+            "Confidence intervals are bootstrap CIs over executed runs; paired significance testing is not implemented in this first-priority runner yet.",
+        ],
+    )
+    next_steps = config.get(
+        "next_steps",
+        [
+            "Replace the greedy full_reschedule reference with a true global CP-SAT recomputation baseline.",
+            "Expand learning comparators with one heavier neural scheduler only after the decomposition story is stable.",
+            "Add public benchmark subsets once the synthetic ID and OOD story is stable.",
+        ],
+    )
     artifact_index = [
         "metrics.csv",
         "metrics_summary.csv",

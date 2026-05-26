@@ -1,4 +1,5 @@
-experiment_name: first_priority_id_rl_region_lbbd
+experiment_name: first_priority_scale_ood_rl_region_lbbd
+experiment_scope: "the Scale-OOD first-priority synthetic matrix"
 output_root: experiments/results
 device: cuda
 seeds: [20260518, 20260519, 20260520, 20260521, 20260522]
@@ -9,7 +10,7 @@ defaults:
     val_instances: 8
     test_instances: 12
     train_job_range: [6, 8]
-    test_job_range: [6, 8]
+    test_job_range: [9, 11]
     machines: 4
     ops_per_job: [3, 5]
     flexibility_choices: [2, 3]
@@ -32,14 +33,11 @@ defaults:
       machine_reassignment: 0.3
 
 scenarios:
-  - name: id_small
-  - name: id_medium
+  - name: scale_ood_small_to_medium
+  - name: scale_ood_medium_to_large
     data:
-      train_instances: 24
-      val_instances: 8
-      test_instances: 12
       train_job_range: [9, 11]
-      test_job_range: [9, 11]
+      test_job_range: [12, 14]
       machines: 5
       ops_per_job: [4, 6]
       flexibility_choices: [2, 3, 4]
@@ -138,3 +136,18 @@ learned_methods:
       max_grad_norm: 1.0
       ppo_epochs: 4
       minibatch_size: 32
+
+known_risks:
+  - Public benchmark and Disturbance-OOD blocks are deferred from this Scale-OOD run.
+  - Scale-OOD is synthetic generator extrapolation, not family-level benchmark transfer.
+  - The full-reschedule reference remains a greedy disturbed reschedule, not a global exact recomputation.
+
+deviations:
+  - This slice completes Scale-OOD synthetic evaluation only; public benchmarks remain out of scope.
+  - "The learning baseline set is intentionally compact: PPO RL plus oracle behavior cloning."
+  - Confidence intervals are bootstrap CIs over executed runs; paired significance testing is not implemented in this first-priority runner yet.
+
+next_steps:
+  - Compare Scale-OOD results against the completed ID matrix.
+  - Add Disturbance-OOD and a public benchmark subset.
+  - Replace the greedy full_reschedule reference with a true global CP-SAT recomputation baseline.
